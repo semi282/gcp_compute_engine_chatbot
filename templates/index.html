@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Herbwitch's Apprentice | 허브마녀의 수습생 아이린</title>
+  <meta name="description" content="달빛 정원의 수습 마녀 아이린과 함께하는 Gemini 3.8 Flash 기반의 지혜로운 AI 챗봇 서비스">
+
+  <!-- Google Fonts: Cinzel (Book Cover Style), Gowun Batang (Korean Literary), Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Gowun+Batang:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Highlight.js for Code Highlighting -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+  <!-- Marked.js for Markdown Rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <!-- Ornate Top Header -->
+      <div class="sidebar-header">
+        <div class="brand">
+          <div class="brand-icon-botanical">
+            <i class="fa-solid fa-seedling"></i>
+          </div>
+          <div class="brand-text">
+            <h2 class="book-title-serif">THE HERBWITCH</h2>
+            <span class="brand-tag">Apprentice's Garden</span>
+          </div>
+        </div>
+        <button class="icon-btn sidebar-close-btn" id="sidebarCloseBtn" title="서재 닫기">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Character Mini Profile Widget -->
+      <div class="character-mini-card">
+        <div class="character-avatar-wrapper">
+          <img src="/static/img/ireen_avatar.png" alt="아이린" class="character-avatar-img">
+          <span class="avatar-star-badge"><i class="fa-solid fa-sparkles"></i></span>
+        </div>
+        <div class="character-info">
+          <div class="character-name">아이린 <span class="character-role">Ireen Chau</span></div>
+          <div class="character-desc">달빛 약초 정원의 수습 마녀</div>
+          <div class="character-status">
+            <span class="status-pulse-gold"></span>
+            <span>지혜의 수정구 연결됨</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <div class="sidebar-action">
+        <button class="new-chat-btn" id="newChatBtn">
+          <i class="fa-solid fa-wand-magic-sparkles"></i>
+          <span>새로운 이야기 시작</span>
+          <kbd class="shortcut-badge">Ctrl+K</kbd>
+        </button>
+      </div>
+
+      <!-- Section Title -->
+      <div class="sidebar-section-title">
+        <span><i class="fa-regular fa-bookmark"></i> 정원의 기록들</span>
+        <button class="clear-all-sessions-btn" id="clearAllSessionsBtn" title="모든 기록 지우기">
+          <i class="fa-regular fa-trash-can"></i>
+        </button>
+      </div>
+
+      <!-- Session List -->
+      <div class="chat-history-list" id="chatHistoryList">
+        <!-- Dynamically populated session items -->
+      </div>
+
+      <!-- Sidebar Footer / Settings -->
+      <div class="sidebar-footer">
+        <div class="api-status-card" id="apiStatusCard">
+          <div class="status-indicator">
+            <span class="status-dot" id="statusDot"></span>
+            <span class="status-label" id="statusLabel">마법 영감(API) 확인 중...</span>
+          </div>
+          <div class="key-preview" id="keyPreview">GEMINI_API_KEY</div>
+        </div>
+
+        <button class="settings-btn" id="openSettingsBtn">
+          <i class="fa-solid fa-sliders"></i>
+          <span>그리모어(설정) 열기</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Chat Container -->
+    <main class="main-content">
+      <!-- Top Navigation Bar -->
+      <header class="top-nav">
+        <div class="nav-left">
+          <button class="icon-btn sidebar-toggle-btn" id="sidebarToggleBtn" title="서재 메뉴">
+            <i class="fa-solid fa-bars"></i>
+          </button>
+          <div class="nav-character-tag">
+            <img src="/static/img/ireen_avatar.png" alt="아이린" class="nav-avatar-tiny">
+            <span class="nav-story-title">The Herbwitch's Apprentice</span>
+          </div>
+          <div class="model-badge-container">
+            <label for="modelSelectNav" class="model-select-label">마법 영감:</label>
+            <div class="model-select-wrapper">
+              <i class="fa-solid fa-sparkles model-icon"></i>
+              <select id="modelSelectNav" class="model-select-nav">
+                <option value="gemini-3.8-flash" selected>Gemini 3.8 Flash (아이린의 기본 영감)</option>
+                <option value="gemini-7.3-flash">Gemini 7.3 Flash</option>
+                <option value="gemini-3.7-flash">Gemini 3.7 Flash</option>
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="nav-right">
+          <button class="nav-action-btn" id="exportChatBtn" title="양피지에 기록 내보내기">
+            <i class="fa-solid fa-scroll"></i>
+            <span class="btn-text">기록 보관</span>
+          </button>
+          <button class="nav-action-btn" id="clearCurrentChatBtn" title="현재 대화 지우기">
+            <i class="fa-regular fa-trash-can"></i>
+            <span class="btn-text">정리하기</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Chat Messages Container -->
+      <div class="chat-viewport" id="chatViewport">
+        <!-- Welcome Screen (The Herbwitch's Apprentice Book Arch & Character Portrait) -->
+        <div class="welcome-screen" id="welcomeScreen">
+          <!-- Victorian Ornate Arch Frame -->
+          <div class="herbwitch-arch-frame">
+            <div class="arch-filigree-top">
+              <span class="filigree-motif">✦</span>
+              <span class="arch-book-tag">ILLUSTRATED EDITION</span>
+              <span class="filigree-motif">✦</span>
+            </div>
+
+            <!-- Character Portrait Hero Card -->
+            <div class="character-hero-wrapper">
+              <div class="portrait-glow-halo"></div>
+              <img src="/static/img/ireen_character.jpg" alt="수습 허브마녀 아이린" class="character-hero-img">
+              <div class="portrait-ornate-border"></div>
+            </div>
+
+            <div class="arch-title-block">
+              <div class="magical-sub">THE</div>
+              <h1 class="arch-main-title">HERBWITCH'S APPRENTICE</h1>
+              <div class="author-name">I R E E N &nbsp; C H A U</div>
+            </div>
+
+            <p class="welcome-story-p">
+              “어서 오세요, 여행자님! 달빛과 향긋한 약초가 가득한 정원에 오신 것을 환영해요.<br>
+              저는 스승님의 가르침을 이어받아 세상의 지혜를 공부하는 수습 허브마녀 <strong>아이린</strong>이랍니다.<br>
+              마음의 휴식을 주는 허브 처방부터 코딩, 과학, 그리고 실시간 세상의 소식까지 무엇이든 물어보세요.”
+            </p>
+
+            <div class="arch-divider">
+              <span class="divider-swan">🦢</span>
+              <span class="divider-crystal">✦ 🔮 ✦</span>
+              <span class="divider-swan flip">🦢</span>
+            </div>
+
+            <!-- Botanical Suggestion Cards -->
+            <div class="prompt-suggestions">
+              <div class="suggestion-card" data-prompt="마음의 안정과 깊은 수면에 도움을 주는 향긋한 허브티 블렌딩 레시피와 효능을 자세히 알려줘.">
+                <div class="suggestion-icon"><i class="fa-solid fa-leaf"></i></div>
+                <div class="suggestion-info">
+                  <h4>달빛 허브티 블렌딩 처방</h4>
+                  <p>캐모마일과 라벤더 등 마녀의 치유 레시피</p>
+                </div>
+              </div>
+
+              <div class="suggestion-card" data-prompt="지혜의 수정구로 오늘 대한민국과 전 세계의 가장 중요한 실시간 주요 소식 3가지만 요약해서 들려줘.">
+                <div class="suggestion-icon"><i class="fa-solid fa-crystal-ball"></i></div>
+                <div class="suggestion-info">
+                  <h4>지혜의 수정구 (실시간 뉴스)</h4>
+                  <p>Google 검색으로 비추는 세상의 최신 소식</p>
+                </div>
+              </div>
+
+              <div class="suggestion-card" data-prompt="GCP Compute Engine 가상 머신에 이 웹 챗봇 서비스를 상시 실행할 수 있도록 systemd 서비스로 등록하는 완벽한 가이드를 알려줘.">
+                <div class="suggestion-icon"><i class="fa-solid fa-scroll"></i></div>
+                <div class="suggestion-info">
+                  <h4>GCP 서버 배포 마법서</h4>
+                  <p>클라우드 VM 생성부터 자동 실행 비법까지</p>
+                </div>
+              </div>
+
+              <div class="suggestion-card" data-prompt="Python과 Flask를 활용하여 실시간 비동기 스트리밍 웹 서비스를 구현하는 핵심 원리와 코드를 설명해줘.">
+                <div class="suggestion-icon"><i class="fa-solid fa-wand-sparkles"></i></div>
+                <div class="suggestion-info">
+                  <h4>실시간 비동기 연금술 코드</h4>
+                  <p>SSE 스트리밍과 효율적인 데이터 전달 비법</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Messages stream container -->
+        <div class="messages-container" id="messagesContainer"></div>
+      </div>
+
+      <!-- Chat Input Dock -->
+      <footer class="input-dock-container">
+        <div class="input-dock">
+          <!-- Active model indicator pill & Web Search Toggle -->
+          <div class="dock-header">
+            <div class="dock-header-left">
+              <div class="active-model-pill" id="activeModelPill">
+                <span class="pulse-dot-gold"></span>
+                <span id="activeModelName">아이린 • Gemini 3.8 Flash</span>
+              </div>
+              <button class="web-search-toggle active" id="webSearchToggle" type="button" title="실시간 웹 검색 (Google Search Grounding) 켜기/끄기">
+                <i class="fa-solid fa-crystal-ball"></i>
+                <span id="webSearchToggleLabel">실시간 수정구 ON</span>
+              </button>
+            </div>
+            <div class="token-latency-info" id="statusNotice">
+              <i class="fa-solid fa-shield-halved"></i> 안전한 환경변수 보호 모드
+            </div>
+          </div>
+
+          <div class="input-form-wrapper">
+            <textarea
+              id="messageInput"
+              class="message-input"
+              rows="1"
+              placeholder="아이린에게 약초의 지혜, 코딩, 세상의 소식에 대해 물어보세요... (Shift+Enter 줄바꿈)"
+              autocomplete="off"
+            ></textarea>
+
+            <div class="input-actions">
+              <button class="stop-btn hidden" id="stopBtn" title="마법 영감 멈추기">
+                <i class="fa-solid fa-square"></i>
+                <span>중단</span>
+              </button>
+              <button class="send-btn" id="sendBtn" title="질문 보내기">
+                <i class="fa-solid fa-feather-pointed"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="input-dock-footer">
+            <span class="dock-tip">Enter로 전송 • Shift + Enter로 줄바꿈 • 🔮 실시간 수정구(웹 검색) 지원 • 허브마녀의 수습생 아이린</span>
+          </div>
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <!-- Settings Modal (Grimoire) -->
+  <div class="modal-overlay hidden" id="settingsModal">
+    <div class="modal-content glass-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-book-sparkles"></i>
+          <h3>아이린의 서재 그리모어 (설정)</h3>
+        </div>
+        <button class="icon-btn modal-close-btn" id="closeSettingsBtn">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="setting-group">
+          <label class="setting-label" for="modalModelSelect">마법 영감 (AI 모델) 선택</label>
+          <p class="setting-desc">아이린의 사유와 추론에 불을 지필 Gemini 모델을 선택합니다.</p>
+          <select id="modalModelSelect" class="custom-select">
+            <option value="gemini-3.8-flash" selected>Gemini 3.8 Flash (권장 / 초고속 영감)</option>
+            <option value="gemini-7.3-flash">Gemini 7.3 Flash</option>
+            <option value="gemini-3.7-flash">Gemini 3.7 Flash</option>
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+          </select>
+        </div>
+
+        <div class="setting-group">
+          <div class="slider-label-row">
+            <label class="setting-label" for="temperatureSlider">상상력의 온도 (Temperature): <span id="tempValueDisplay">0.7</span></label>
+          </div>
+          <p class="setting-desc">낮을수록 정확하고 정밀한 지혜, 높을수록 신비롭고 창의적인 답변을 들려줍니다.</p>
+          <input type="range" id="temperatureSlider" min="0.0" max="2.0" step="0.1" value="0.7" class="custom-range">
+          <div class="range-labels">
+            <span>0.0 (냉철한 이성)</span>
+            <span>1.0 (따스한 조화)</span>
+            <span>2.0 (풍부한 상상)</span>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label" for="systemInstructionInput">아이린의 페르소나 및 지침 (System Instruction)</label>
+          <p class="setting-desc">수습 마녀 아이린에게 특별히 부여할 성격이나 말투, 전문 분야 지침을 설정합니다.</p>
+          <textarea
+            id="systemInstructionInput"
+            class="custom-textarea"
+            rows="3"
+            placeholder="기본 설정: 'The Herbwitch's Apprentice'의 지혜롭고 다정한 수습 허브마녀 아이린 페르소나가 적용되어 있습니다."
+          ></textarea>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">지혜의 수정구 (Google 실시간 검색)</label>
+          <p class="setting-desc">세상의 최신 소식이나 실시간 지식이 필요할 때 Google 검색으로 진실을 확인합니다.</p>
+          <label class="custom-checkbox-row">
+            <input type="checkbox" id="modalWebSearchCheckbox" checked>
+            <span>실시간 수정구(웹 검색) 항시 활성화</span>
+          </label>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">마법 원천 (API 키 구성 상태)</label>
+          <div class="api-key-config-box" id="modalKeyStatusBox">
+            <i class="fa-solid fa-key"></i>
+            <span id="modalKeyStatusText">환경변수 확인 중...</span>
+          </div>
+          <p class="setting-subtext">API 키는 브라우저가 아닌 로컬 서버의 <code>GEMINI_API_KEY</code> 환경변수에서 안전하게 수호됩니다.</p>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="resetSettingsBtn">기본 그리모어로 복원</button>
+        <button class="btn btn-primary" id="saveSettingsBtn">지혜 저장하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Main JavaScript File -->
+  <script src="/static/js/chat.js"></script>
+</body>
+</html>
