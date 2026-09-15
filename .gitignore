@@ -1,30 +1,80 @@
-# Python Bytecode & Cache
+# ==========================================
+# 🌿 The Herbwitch's Apprentice - .gitignore
+# Security & Privacy Protection Rules
+# ==========================================
+
+# 1. API Keys, Environment Variables & Secrets
+# ------------------------------------------
+.env
+.env.local
+.env.*.local
+.env.*
+!.env.example
+*.secret
+*.token
+
+# 2. SSL/TLS Certificates, SSH Keys & Cloud Credentials
+# ------------------------------------------
+*.key
+*.pem
+*.crt
+*.cer
+*.der
+*.pfx
+*.p12
+*.ppk
+id_rsa*
+id_ed25519*
+google_compute_engine*
+adc.json
+*credentials*.json
+*service_account*.json
+*client_secret*.json
+
+# 3. Database Files & User Records
+# ------------------------------------------
+instance/
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.db-journal
+
+# 4. Packaging, Bundles & Archives
+# ------------------------------------------
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.gz
+bundle.tar.gz
+
+# 5. Python Bytecode, Caches & Environments
+# ------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .pytest_cache/
-
-# Environments & Virtualenv
-.env
-.env.local
-.env.*.local
 venv/
 env/
 ENV/
 .venv/
 
-# IDE & Editor Settings
+# 6. IDE, Editors & OS Settings
+# ------------------------------------------
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# Operating System Files
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# Logs & Temporary Files
+# 7. Logs, Debug & Temporary Files
+# ------------------------------------------
 *.log
 scratch/
+temp/
+tmp/

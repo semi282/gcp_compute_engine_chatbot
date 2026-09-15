@@ -12,7 +12,8 @@ const STATE = {
   webSearch: true,
   isGenerating: false,
   abortController: null,
-  apiKeyConnected: false
+  apiKeyConnected: false,
+  user: null
 };
 
 // DOM Elements
@@ -53,7 +54,29 @@ const DOM = {
   modalKeyStatusText: document.getElementById('modalKeyStatusText'),
   resetSettingsBtn: document.getElementById('resetSettingsBtn'),
   saveSettingsBtn: document.getElementById('saveSettingsBtn'),
-  toastContainer: document.getElementById('toastContainer')
+  toastContainer: document.getElementById('toastContainer'),
+
+  // Auth Elements
+  openAuthModalBtn: document.getElementById('openAuthModalBtn'),
+  navUserBadge: document.getElementById('navUserBadge'),
+  navUserName: document.getElementById('navUserName'),
+  logoutBtn: document.getElementById('logoutBtn'),
+  authModal: document.getElementById('authModal'),
+  closeAuthModalBtn: document.getElementById('closeAuthModalBtn'),
+  authModalTitle: document.getElementById('authModalTitle'),
+  tabLoginBtn: document.getElementById('tabLoginBtn'),
+  tabRegisterBtn: document.getElementById('tabRegisterBtn'),
+  authAlertBox: document.getElementById('authAlertBox'),
+  loginForm: document.getElementById('loginForm'),
+  registerForm: document.getElementById('registerForm'),
+  loginUsername: document.getElementById('loginUsername'),
+  loginPassword: document.getElementById('loginPassword'),
+  registerUsername: document.getElementById('registerUsername'),
+  registerNickname: document.getElementById('registerNickname'),
+  registerPassword: document.getElementById('registerPassword'),
+  registerPasswordConfirm: document.getElementById('registerPasswordConfirm'),
+  loginSubmitBtn: document.getElementById('loginSubmitBtn'),
+  registerSubmitBtn: document.getElementById('registerSubmitBtn')
 };
 
 // Markdown Renderer Customization
@@ -98,6 +121,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   loadPreferences();
   setupEventListeners();
   await checkApiStatus();
+  await checkAuth();
   loadSessions();
 
   if (STATE.sessions.length === 0) {
@@ -215,6 +239,9 @@ function loadSessions() {
 function saveSessions() {
   localStorage.setItem('gemini_chat_sessions', JSON.stringify(STATE.sessions));
   renderSessionList();
+  if (STATE.user) {
+    syncSessionsToCloud();
+  }
 }
 
 function createNewSession() {
@@ -682,6 +709,34 @@ function setupEventListeners() {
     }
   });
 
+  // Auth Controls
+  if (DOM.openAuthModalBtn) {
+    DOM.openAuthModalBtn.addEventListener('click', () => openAuthModal('login'));
+  }
+  if (DOM.closeAuthModalBtn) {
+    DOM.closeAuthModalBtn.addEventListener('click', closeAuthModal);
+  }
+  if (DOM.authModal) {
+    DOM.authModal.addEventListener('click', (e) => {
+      if (e.target === DOM.authModal) closeAuthModal();
+    });
+  }
+  if (DOM.tabLoginBtn) {
+    DOM.tabLoginBtn.addEventListener('click', () => switchAuthTab('login'));
+  }
+  if (DOM.tabRegisterBtn) {
+    DOM.tabRegisterBtn.addEventListener('click', () => switchAuthTab('register'));
+  }
+  if (DOM.loginForm) {
+    DOM.loginForm.addEventListener('submit', handleLogin);
+  }
+  if (DOM.registerForm) {
+    DOM.registerForm.addEventListener('submit', handleRegister);
+  }
+  if (DOM.logoutBtn) {
+    DOM.logoutBtn.addEventListener('click', handleLogout);
+  }
+
   DOM.temperatureSlider.addEventListener('input', (e) => {
     DOM.tempValueDisplay.textContent = parseFloat(e.target.value).toFixed(1);
   });
@@ -817,3 +872,216 @@ function showToast(message, type = 'info') {
     setTimeout(() => toast.remove(), 300);
   }, 3200);
 }
+
+// ==========================================
+// Authentication Management
+// ==========================================
+
+async function checkAuth() {
+  try {
+    const res = await fetch('/api/auth/me');
+    const data = await res.json();
+    if (data.authenticated && data.user) {
+      STATE.user = data.user;
+      renderUserAuthUI();
+      await loadUserCloudSessions();
+    } else {
+      STATE.user = null;
+      renderUserAuthUI();
+    }
+  } catch (err) {
+    console.warn('Auth check error:', err);
+    STATE.user = null;
+    renderUserAuthUI();
+  }
+}
+
+function renderUserAuthUI() {
+  if (STATE.user) {
+    if (DOM.openAuthModalBtn) DOM.openAuthModalBtn.classList.add('hidden');
+    if (DOM.navUserBadge) DOM.navUserBadge.classList.remove('hidden');
+    if (DOM.navUserName) DOM.navUserName.textContent = `수습생 ${STATE.user.nickname}`;
+  } else {
+    if (DOM.openAuthModalBtn) DOM.openAuthModalBtn.classList.remove('hidden');
+    if (DOM.navUserBadge) DOM.navUserBadge.classList.add('hidden');
+  }
+}
+
+function openAuthModal(tab = 'login') {
+  if (!DOM.authModal) return;
+  DOM.authModal.classList.remove('hidden');
+  switchAuthTab(tab);
+  hideAuthAlert();
+  if (tab === 'login') {
+    setTimeout(() => DOM.loginUsername && DOM.loginUsername.focus(), 50);
+  } else {
+    setTimeout(() => DOM.registerUsername && DOM.registerUsername.focus(), 50);
+  }
+}
+
+function closeAuthModal() {
+  if (!DOM.authModal) return;
+  DOM.authModal.classList.add('hidden');
+  hideAuthAlert();
+}
+
+function switchAuthTab(tab) {
+  if (!DOM.tabLoginBtn || !DOM.tabRegisterBtn) return;
+  if (tab === 'login') {
+    DOM.tabLoginBtn.classList.add('active');
+    DOM.tabRegisterBtn.classList.remove('active');
+    if (DOM.loginForm) DOM.loginForm.classList.remove('hidden');
+    if (DOM.registerForm) DOM.registerForm.classList.add('hidden');
+    if (DOM.authModalTitle) DOM.authModalTitle.textContent = '달빛 약초 공방 수습생 로그인';
+  } else {
+    DOM.tabRegisterBtn.classList.add('active');
+    DOM.tabLoginBtn.classList.remove('active');
+    if (DOM.registerForm) DOM.registerForm.classList.remove('hidden');
+    if (DOM.loginForm) DOM.loginForm.classList.add('hidden');
+    if (DOM.authModalTitle) DOM.authModalTitle.textContent = '새 수습생 입회 신청';
+  }
+  hideAuthAlert();
+}
+
+function showAuthAlert(msg, type = 'error') {
+  if (!DOM.authAlertBox) return;
+  DOM.authAlertBox.className = `auth-alert-box ${type}`;
+  DOM.authAlertBox.innerHTML = `<i class="fa-solid ${type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check'}"></i> <span>${escapeHtml(msg)}</span>`;
+  DOM.authAlertBox.classList.remove('hidden');
+}
+
+function hideAuthAlert() {
+  if (!DOM.authAlertBox) return;
+  DOM.authAlertBox.classList.add('hidden');
+  DOM.authAlertBox.innerHTML = '';
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const username = DOM.loginUsername.value.trim();
+  const password = DOM.loginPassword.value.trim();
+
+  if (!username || !password) {
+    showAuthAlert('아이디와 마법 암호를 모두 입력해주세요.', 'error');
+    return;
+  }
+
+  DOM.loginSubmitBtn.disabled = true;
+  DOM.loginSubmitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>확인 중...</span>';
+
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      STATE.user = data.user;
+      renderUserAuthUI();
+      closeAuthModal();
+      DOM.loginForm.reset();
+      showToast(data.message, 'success');
+      await loadUserCloudSessions();
+    } else {
+      showAuthAlert(data.message || '로그인에 실패했습니다.', 'error');
+    }
+  } catch (err) {
+    showAuthAlert('서버 연결 중 오류가 발생했습니다.', 'error');
+  } finally {
+    DOM.loginSubmitBtn.disabled = false;
+    DOM.loginSubmitBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> <span>공방 서재 입장하기</span>';
+  }
+}
+
+async function handleRegister(e) {
+  e.preventDefault();
+  const username = DOM.registerUsername.value.trim();
+  const nickname = DOM.registerNickname.value.trim();
+  const password = DOM.registerPassword.value.trim();
+  const confirmPassword = DOM.registerPasswordConfirm.value.trim();
+
+  if (!username || !nickname || !password) {
+    showAuthAlert('모든 항목을 입력해주세요.', 'error');
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    showAuthAlert('마법 암호와 확인 암호가 일치하지 않습니다.', 'error');
+    return;
+  }
+
+  DOM.registerSubmitBtn.disabled = true;
+  DOM.registerSubmitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>입회 등록 중...</span>';
+
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, nickname, password })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      STATE.user = data.user;
+      renderUserAuthUI();
+      closeAuthModal();
+      DOM.registerForm.reset();
+      showToast(data.message, 'success');
+      await syncSessionsToCloud();
+    } else {
+      showAuthAlert(data.message || '입회 처리에 실패했습니다.', 'error');
+    }
+  } catch (err) {
+    showAuthAlert('서버 연결 중 오류가 발생했습니다.', 'error');
+  } finally {
+    DOM.registerSubmitBtn.disabled = false;
+    DOM.registerSubmitBtn.innerHTML = '<i class="fa-solid fa-scroll"></i> <span>수습생 명부에 등록하기</span>';
+  }
+}
+
+async function handleLogout() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' });
+  } catch (err) {}
+
+  STATE.user = null;
+  renderUserAuthUI();
+  showToast('안전하게 서재에서 물러났습니다. 평온한 시간 되세요!', 'info');
+}
+
+async function loadUserCloudSessions() {
+  if (!STATE.user) return;
+  try {
+    const res = await fetch('/api/user/sessions');
+    const data = await res.json();
+    if (data.sessions && data.sessions.length > 0) {
+      STATE.sessions = data.sessions;
+      localStorage.setItem('gemini_chat_sessions', JSON.stringify(STATE.sessions));
+      renderSessionList();
+      if (STATE.sessions.length > 0) {
+        switchSession(STATE.sessions[0].id);
+      }
+    } else if (STATE.sessions.length > 0) {
+      // Sync local sessions to cloud on first login
+      await syncSessionsToCloud();
+    }
+  } catch (err) {
+    console.warn('Failed to load cloud sessions:', err);
+  }
+}
+
+async function syncSessionsToCloud() {
+  if (!STATE.user) return;
+  try {
+    await fetch('/api/user/sessions/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessions: STATE.sessions })
+    });
+  } catch (err) {
+    console.warn('Failed to sync sessions to cloud:', err);
+  }
+}
+

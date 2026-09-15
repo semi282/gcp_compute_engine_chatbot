@@ -1,12 +1,64 @@
 import os
 import json
+import re
+import sqlite3
 import requests
-from flask import Flask, render_template, request, Response, jsonify, stream_with_context
+from flask import Flask, render_template, request, Response, jsonify, stream_with_context, session
+from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY") or "herbwitch_secret_key_2026_ireen_apprentice_secure_moonlight"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+# SQLite Database Setup
+DB_PATH = os.path.join(app.instance_path, "chatbot.db")
+os.makedirs(app.instance_path, exist_ok=True)
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    with get_db() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                nickname TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'apprentice',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS chat_sessions (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                sources TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+            )
+        """)
+        conn.commit()
+
+init_db()
 
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -48,8 +100,60 @@ AVAILABLE_MODELS = [
     }
 ]
 
+_CACHED_SECRET_KEY = None
+
 def get_api_key():
-    return os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or ""
+    global _CACHED_SECRET_KEY
+    # 1. Environment variables
+    env_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if env_key and env_key.strip():
+        return env_key.strip()
+
+    # 2. Return cached secret if already retrieved
+    if _CACHED_SECRET_KEY:
+        return _CACHED_SECRET_KEY
+
+    # 3. Fallback: Retrieve from GCP Secret Manager (projects/352439210179/secrets/GEMINI_API_KEY)
+    secret_path = os.environ.get("GCP_SECRET_NAME", "projects/352439210179/secrets/GEMINI_API_KEY/versions/latest")
+    
+    # Try Google Cloud Python SDK if installed
+    try:
+        from google.cloud import secretmanager
+        client = secretmanager.SecretManagerServiceClient()
+        response = client.access_secret_version(name=secret_path)
+        _CACHED_SECRET_KEY = response.payload.data.decode("utf-8").strip()
+        print("[Auth] Retrieved GEMINI_API_KEY from GCP Secret Manager (SDK)")
+        return _CACHED_SECRET_KEY
+    except Exception:
+        pass
+
+    # Try GCP Compute Engine metadata server token + REST API
+    try:
+        token_resp = requests.get(
+            "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+            headers={"Metadata-Flavor": "Google"},
+            timeout=2
+        )
+        if token_resp.status_code == 200:
+            token = token_resp.json().get("access_token")
+            if not secret_path.endswith(":access") and "/versions/" not in secret_path:
+                url = f"https://secretmanager.googleapis.com/v1/{secret_path}/versions/latest:access"
+            elif not secret_path.endswith(":access"):
+                url = f"https://secretmanager.googleapis.com/v1/{secret_path}:access"
+            else:
+                url = f"https://secretmanager.googleapis.com/v1/{secret_path}"
+
+            s_resp = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=5)
+            if s_resp.status_code == 200:
+                import base64
+                data_b64 = s_resp.json().get("payload", {}).get("data", "")
+                _CACHED_SECRET_KEY = base64.b64decode(data_b64).decode("utf-8").strip()
+                print("[Auth] Retrieved GEMINI_API_KEY from GCP Secret Manager (REST)")
+                return _CACHED_SECRET_KEY
+    except Exception:
+        pass
+
+    return ""
 
 @app.route("/")
 def index():
@@ -77,6 +181,226 @@ def get_models():
     return jsonify({
         "models": AVAILABLE_MODELS
     })
+
+# ==========================================
+# Authentication & User Management Endpoints
+# ==========================================
+
+@app.route("/api/auth/register", methods=["POST"])
+def auth_register():
+    data = request.get_json(force=True) or {}
+    username = str(data.get("username", "")).strip().lower()
+    nickname = str(data.get("nickname", "")).strip()
+    password = str(data.get("password", "")).strip()
+
+    # Validation
+    if not username or not re.match(r"^[a-zA-Z0-9_]{3,20}$", username):
+        return jsonify({
+            "success": False,
+            "message": "아이디는 3~20자의 영문, 숫자, 밑줄(_)만 사용 가능합니다."
+        }), 400
+
+    if not nickname or len(nickname) < 2 or len(nickname) > 20:
+        return jsonify({
+            "success": False,
+            "message": "수습생 칭호(닉네임)는 2~20자 사이여야 합니다."
+        }), 400
+
+    if not password or len(password) < 6:
+        return jsonify({
+            "success": False,
+            "message": "마법 암호(비밀번호)는 최소 6자 이상이어야 합니다."
+        }), 400
+
+    password_hash = generate_password_hash(password)
+
+    try:
+        with get_db() as conn:
+            cursor = conn.execute(
+                "INSERT INTO users (username, nickname, password_hash) VALUES (?, ?, ?)",
+                (username, nickname, password_hash)
+            )
+            user_id = cursor.lastrowid
+            conn.commit()
+
+        session["user_id"] = user_id
+        return jsonify({
+            "success": True,
+            "message": f"어서 오세요! 수습생 '{nickname}' 님의 입회가 승인되었습니다. ✨",
+            "user": {
+                "id": user_id,
+                "username": username,
+                "nickname": nickname,
+                "role": "apprentice"
+            }
+        }), 201
+    except sqlite3.IntegrityError:
+        return jsonify({
+            "success": False,
+            "message": "이미 마법 서고에 등록된 수습생 아이디입니다."
+        }), 409
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"입회 처리 중 오류가 발생했습니다: {str(e)}"
+        }), 500
+
+@app.route("/api/auth/login", methods=["POST"])
+def auth_login():
+    data = request.get_json(force=True) or {}
+    username = str(data.get("username", "")).strip().lower()
+    password = str(data.get("password", "")).strip()
+
+    if not username or not password:
+        return jsonify({
+            "success": False,
+            "message": "아이디와 마법 암호를 모두 입력해주세요."
+        }), 400
+
+    with get_db() as conn:
+        user = conn.execute(
+            "SELECT id, username, nickname, password_hash, role FROM users WHERE username = ?",
+            (username,)
+        ).fetchone()
+
+    if not user or not check_password_hash(user["password_hash"], password):
+        return jsonify({
+            "success": False,
+            "message": "아이디 또는 마법 암호가 일치하지 않습니다."
+        }), 401
+
+    session["user_id"] = user["id"]
+    return jsonify({
+        "success": True,
+        "message": f"반가워요, 수습생 {user['nickname']} 님! 약초 공방에 오신 것을 환영해요. 🌿",
+        "user": {
+            "id": user["id"],
+            "username": user["username"],
+            "nickname": user["nickname"],
+            "role": user["role"]
+        }
+    })
+
+@app.route("/api/auth/logout", methods=["POST"])
+def auth_logout():
+    session.pop("user_id", None)
+    return jsonify({
+        "success": True,
+        "message": "안전하게 서재에서 물러났습니다. 평온한 시간 되세요!"
+    })
+
+@app.route("/api/auth/me", methods=["GET"])
+def auth_me():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({
+            "authenticated": False,
+            "user": None
+        })
+
+    with get_db() as conn:
+        user = conn.execute(
+            "SELECT id, username, nickname, role FROM users WHERE id = ?",
+            (user_id,)
+        ).fetchone()
+
+    if not user:
+        session.pop("user_id", None)
+        return jsonify({
+            "authenticated": False,
+            "user": None
+        })
+
+    return jsonify({
+        "authenticated": True,
+        "user": {
+            "id": user["id"],
+            "username": user["username"],
+            "nickname": user["nickname"],
+            "role": user["role"]
+        }
+    })
+
+@app.route("/api/user/sessions", methods=["GET"])
+def get_user_sessions():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"sessions": []})
+
+    with get_db() as conn:
+        sessions_rows = conn.execute(
+            "SELECT id, title, created_at, updated_at FROM chat_sessions WHERE user_id = ? ORDER BY updated_at DESC",
+            (user_id,)
+        ).fetchall()
+
+        result = []
+        for s in sessions_rows:
+            msgs = conn.execute(
+                "SELECT role, content, sources, created_at FROM chat_messages WHERE session_id = ? ORDER BY id ASC",
+                (s["id"],)
+            ).fetchall()
+            
+            message_list = []
+            for m in msgs:
+                sources = []
+                if m["sources"]:
+                    try:
+                        sources = json.loads(m["sources"])
+                    except Exception:
+                        pass
+                message_list.append({
+                    "role": m["role"],
+                    "content": m["content"],
+                    "sources": sources,
+                    "timestamp": m["created_at"]
+                })
+
+            result.append({
+                "id": s["id"],
+                "title": s["title"],
+                "updatedAt": s["updated_at"],
+                "messages": message_list
+            })
+
+    return jsonify({"sessions": result})
+
+@app.route("/api/user/sessions/sync", methods=["POST"])
+def sync_user_sessions():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "message": "로그인이 필요합니다."}), 401
+
+    data = request.get_json(force=True) or {}
+    sessions_data = data.get("sessions", [])
+
+    with get_db() as conn:
+        for s in sessions_data:
+            session_id = s.get("id")
+            title = s.get("title", "달빛 아래 새로운 이야기")
+            messages = s.get("messages", [])
+            
+            if not session_id:
+                continue
+
+            conn.execute("""
+                INSERT INTO chat_sessions (id, user_id, title, updated_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO UPDATE SET title = excluded.title, updated_at = CURRENT_TIMESTAMP
+            """, (session_id, user_id, title))
+
+            # Replace messages for this session
+            conn.execute("DELETE FROM chat_messages WHERE session_id = ?", (session_id,))
+            for m in messages:
+                role = m.get("role", "user")
+                content = m.get("content", "")
+                sources_json = json.dumps(m.get("sources", []), ensure_ascii=False) if m.get("sources") else None
+                conn.execute("""
+                    INSERT INTO chat_messages (session_id, role, content, sources)
+                    VALUES (?, ?, ?, ?)
+                """, (session_id, role, content, sources_json))
+        conn.commit()
+
+    return jsonify({"success": True, "message": "서재에 안전하게 동기화되었습니다."})
 
 @app.route("/api/chat/stream", methods=["POST"])
 def chat_stream():

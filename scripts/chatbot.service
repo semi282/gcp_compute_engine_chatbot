@@ -1,0 +1,15 @@
+[Unit]
+Description=The Herbwitch's Apprentice - Gemini Chatbot Service
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/opt/chatbot
+Environment="PORT=5001"
+Environment="GCP_SECRET_NAME=projects/352439210179/secrets/GEMINI_API_KEY/versions/latest"
+ExecStart=/opt/chatbot/venv/bin/python app.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

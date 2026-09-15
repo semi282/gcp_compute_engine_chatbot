@@ -127,6 +127,21 @@
         </div>
 
         <div class="nav-right">
+          <!-- Auth Section -->
+          <div class="nav-auth-section" id="navAuthSection">
+            <button class="nav-action-btn nav-auth-btn" id="openAuthModalBtn" title="수습생 입회 / 서재 로그인">
+              <i class="fa-solid fa-feather-pointed"></i>
+              <span class="btn-text">수습생 입회 / 로그인</span>
+            </button>
+            <div class="nav-user-badge hidden" id="navUserBadge">
+              <div class="nav-user-avatar"><i class="fa-solid fa-seedling"></i></div>
+              <span class="nav-user-name" id="navUserName">수습생</span>
+              <button class="nav-logout-btn" id="logoutBtn" title="서재에서 물러나기 (로그아웃)">
+                <i class="fa-solid fa-arrow-right-from-bracket"></i>
+              </button>
+            </div>
+          </div>
+
           <button class="nav-action-btn" id="exportChatBtn" title="양피지에 기록 내보내기">
             <i class="fa-solid fa-scroll"></i>
             <span class="btn-text">기록 보관</span>
@@ -336,6 +351,78 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" id="resetSettingsBtn">기본 그리모어로 복원</button>
         <button class="btn btn-primary" id="saveSettingsBtn">지혜 저장하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth Modal: Apprentice Registration & Login -->
+  <div class="modal-backdrop" id="authModal">
+    <div class="modal-dialog auth-modal-dialog">
+      <div class="modal-header auth-modal-header">
+        <div class="modal-title-group">
+          <div class="modal-botanical-tag">✦ ACADEMY OF BOTANICAL ARTS ✦</div>
+          <h3 class="modal-title book-title-serif" id="authModalTitle">달빛 약초 공방 수습생 명부</h3>
+        </div>
+        <button class="icon-btn modal-close-btn" id="closeAuthModalBtn" title="닫기">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Auth Tabs -->
+      <div class="auth-tabs">
+        <button class="auth-tab-btn active" id="tabLoginBtn" data-tab="login">
+          <i class="fa-solid fa-key"></i> 수습생 로그인
+        </button>
+        <button class="auth-tab-btn" id="tabRegisterBtn" data-tab="register">
+          <i class="fa-solid fa-feather-pointed"></i> 새 수습생 입회
+        </button>
+      </div>
+
+      <div class="modal-body auth-modal-body">
+        <!-- Alert Notification Box -->
+        <div class="auth-alert-box hidden" id="authAlertBox"></div>
+
+        <!-- Login Form -->
+        <form class="auth-form" id="loginForm">
+          <div class="form-group">
+            <label for="loginUsername"><i class="fa-regular fa-user"></i> 수습생 아이디</label>
+            <input type="text" id="loginUsername" class="auth-input" placeholder="등록한 아이디를 입력하세요" autocomplete="username" required>
+          </div>
+          <div class="form-group">
+            <label for="loginPassword"><i class="fa-solid fa-lock"></i> 마법 암호</label>
+            <input type="password" id="loginPassword" class="auth-input" placeholder="마법 암호를 입력하세요" autocomplete="current-password" required>
+          </div>
+          <button type="submit" class="auth-submit-btn" id="loginSubmitBtn">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span>공방 서재 입장하기</span>
+          </button>
+        </form>
+
+        <!-- Register Form -->
+        <form class="auth-form hidden" id="registerForm">
+          <div class="form-group">
+            <label for="registerUsername"><i class="fa-regular fa-user"></i> 사용할 아이디</label>
+            <input type="text" id="registerUsername" class="auth-input" placeholder="3~20자의 영문, 숫자, 밑줄" autocomplete="username" required>
+            <span class="form-help-text">영문 소문자, 숫자, 밑줄(_) 3~20자</span>
+          </div>
+          <div class="form-group">
+            <label for="registerNickname"><i class="fa-solid fa-signature"></i> 수습생 칭호 (닉네임)</label>
+            <input type="text" id="registerNickname" class="auth-input" placeholder="예: 달빛 약초사, 네오 연금술사" required>
+            <span class="form-help-text">아이린이 대화에서 부를 다정한 호칭입니다.</span>
+          </div>
+          <div class="form-group">
+            <label for="registerPassword"><i class="fa-solid fa-lock"></i> 마법 암호</label>
+            <input type="password" id="registerPassword" class="auth-input" placeholder="최소 6자 이상" autocomplete="new-password" required>
+          </div>
+          <div class="form-group">
+            <label for="registerPasswordConfirm"><i class="fa-solid fa-shield-halved"></i> 마법 암호 확인</label>
+            <input type="password" id="registerPasswordConfirm" class="auth-input" placeholder="암호를 다시 입력하세요" autocomplete="new-password" required>
+          </div>
+          <button type="submit" class="auth-submit-btn" id="registerSubmitBtn">
+            <i class="fa-solid fa-scroll"></i>
+            <span>수습생 명부에 등록하기</span>
+          </button>
+        </form>
       </div>
     </div>
   </div>
