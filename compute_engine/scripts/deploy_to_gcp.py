@@ -152,15 +152,15 @@ def main():
             f"--priority=1000 "
             f"--network=default "
             f"--action=ALLOW "
-            f"--rules=tcp:5000,tcp:80 "
+            f"--rules=tcp:5000,tcp:80,tcp:443 "
             f"--source-ranges=0.0.0.0/0 "
             f"--target-tags=chatbot-server "
             f"--description=\"Allow inbound traffic for Herbwitch Gemini Chatbot\" --quiet"
         )
         run_cmd(fw_create_cmd)
-        log("✔ 방화벽 규칙 생성 완료: 포트 5000, 80 인터넷 전체 오픈")
+        log("✔ 방화벽 규칙 생성 완료: 포트 5000, 80, 443(HTTPS) 인터넷 전체 오픈")
     else:
-        log(f"✔ 기존 방화벽 규칙 `{FIREWALL_RULE}` 확인 (포트 5000, 80 개방됨)")
+        log(f"✔ 기존 방화벽 규칙 `{FIREWALL_RULE}` 확인 (포트 5000, 80, 443 개방됨)")
 
     # Step 4: Compute Engine Instance Check / Create
     log(f"Compute Engine 인스턴스 `{INSTANCE_NAME}` 존재 여부 확인...", "4. Compute Engine 인스턴스 프로비저닝")
@@ -176,7 +176,7 @@ def main():
             f"--zone={ZONE} "
             f"--machine-type={MACHINE_TYPE} "
             f"--network-interface=network-tier=PREMIUM,stack-type=IPV4_ONLY,subnet=default "
-            f"--tags=chatbot-server,http-server "
+            f"--tags=chatbot-server,http-server,https-server "
             f"--metadata=enable-osconfig=TRUE "
             f"--metadata-from-file=startup-script=\"{startup_script_path}\" "
             f"--maintenance-policy=MIGRATE "
@@ -247,8 +247,9 @@ def main():
         "sudo mkdir -p /opt/chatbot && "
         "sudo tar -xzf /tmp/bundle.tar.gz -C /opt/chatbot/ && "
         "sudo cp /opt/chatbot/scripts/chatbot.service /etc/systemd/system/chatbot.service && "
-        "sudo chmod +x /opt/chatbot/scripts/startup.sh && "
+        "sudo chmod +x /opt/chatbot/scripts/startup.sh /opt/chatbot/scripts/setup_https.sh && "
         "sudo bash /opt/chatbot/scripts/startup.sh && "
+        "sudo bash /opt/chatbot/scripts/setup_https.sh && "
         "sudo systemctl daemon-reload && "
         "sudo systemctl enable --now chatbot.service && "
         "sudo systemctl status chatbot.service --no-pager"
@@ -257,33 +258,47 @@ def main():
         f"gcloud compute ssh {INSTANCE_NAME} --zone={ZONE} --project={PROJECT_ID} "
         f"--command=\"{remote_setup_commands}\" --quiet"
     )
-    log("원격 셋업 스크립트 실행 중 (패키지 설치 및 서비스 등록)...")
+    log("원격 셋업 스크립트 실행 중 (패키지 설치, Nginx HTTPS 구성 및 서비스 등록)...")
     res_setup = run_cmd(ssh_exec_cmd, check=True, timeout=600)
     log("✔ 원격 챗봇 서비스 설치 및 systemd 기동 성공!")
     log(f"서비스 상태 출력:\n```\n{res_setup.stdout[-500:] if len(res_setup.stdout) > 500 else res_setup.stdout}\n```")
 
     # Step 10: Health Check & Verification
     log("클라우드 챗봇 서비스 엔드포인트 헬스체크 수행...", "8. 서비스 검증 및 Secret Manager 연동 확인")
-    service_url = f"http://{external_ip}:5000"
-    status_url = f"{service_url}/api/status"
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     
+    candidate_urls = [
+        f"https://{external_ip}",
+        f"https://{external_ip}:5000",
+        f"http://{external_ip}:5000",
+        f"http://{external_ip}:5001"
+    ]
+    
+    service_url = candidate_urls[0]
     success = False
     for attempt in range(1, 15):
-        try:
-            log(f"헬스체크 시도 {attempt}/14 ({status_url})...")
-            resp = requests.get(status_url, timeout=5)
-            if resp.status_code == 200:
-                data = resp.json()
-                has_key = data.get("has_api_key", False)
-                masked_key = data.get("masked_key", "")
-                selected_model = data.get("selected_model", "")
-                log(f"✔ 챗봇 서비스 응답 성공 (HTTP 200 OK)!")
-                log(f"✔ Secret Manager 연동 성공: GEMINI_API_KEY 로드됨 (`{masked_key}`)")
-                log(f"✔ 현재 기본 모델: `{selected_model}`")
-                success = True
-                break
-        except Exception as e:
-            time.sleep(4)
+        for test_url in candidate_urls:
+            status_url = f"{test_url}/api/status"
+            try:
+                resp = requests.get(status_url, timeout=5, verify=False)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    has_key = data.get("has_api_key", False)
+                    masked_key = data.get("masked_key", "")
+                    selected_model = data.get("selected_model", "")
+                    service_url = test_url
+                    log(f"✔ 챗봇 서비스 응답 성공 (HTTP 200 OK, URL: {status_url})!")
+                    log(f"✔ Secret Manager 연동 성공: GEMINI_API_KEY 로드됨 (`{masked_key}`)")
+                    log(f"✔ 현재 기본 모델: `{selected_model}`")
+                    success = True
+                    break
+            except Exception:
+                pass
+        if success:
+            break
+        log(f"헬스체크 대기 중 ({attempt}/14)...")
+        time.sleep(4)
 
     # Step 11: End-to-End Chat API Test on Cloud Instance
     if success:
@@ -296,7 +311,7 @@ def main():
                 "enable_search": False,
                 "history": []
             }
-            chat_resp = requests.post(chat_url, json=chat_payload, timeout=20, stream=True)
+            chat_resp = requests.post(chat_url, json=chat_payload, timeout=20, stream=True, verify=False)
             if chat_resp.status_code == 200:
                 first_chunk = ""
                 for line in chat_resp.iter_lines():
@@ -317,13 +332,15 @@ def main():
             log(f"대화 테스트 경고: {ex}")
 
     # Final Summary Table
+    ip_dash = external_ip.replace('.', '-')
     log("GCP Compute Engine 배포 완료 및 서비스 정보", "9. 최종 배포 결과 요약")
-    log(f"- **웹 서비스 접속 URL**: [http://{external_ip}:5000](http://{external_ip}:5000)")
+    log(f"- **공인 CA HTTPS URL**: [https://{ip_dash}.sslip.io](https://{ip_dash}.sslip.io)")
+    log(f"- **웹 서비스 접속 URL**: [{service_url}]({service_url})")
     log(f"- **Compute Engine VM 인스턴스**: `{INSTANCE_NAME}`")
     log(f"- **존(Zone) / 리전(Region)**: `{ZONE}` / `{REGION}`")
     log(f"- **머신 스펙**: `{MACHINE_TYPE}` (2 vCPU, 4GB RAM, pd-balanced 10GB)")
     log(f"- **공용 외부 IP**: `{external_ip}`")
-    log(f"- **개방 포트**: TCP `5000` (Flask Web UI / API), TCP `80` (HTTP)")
+    log(f"- **개방 포트**: TCP `443` (HTTPS), TCP `80` (HTTP), TCP `5000` (Web UI)")
     log(f"- **GCP Secret Manager 연동**: `{SECRET_NAME}` (VM 메타데이터 인증 기반 자동 로드)")
     log(f"- **최종 배포 상태**: `{'배포 성공 (SUCCESS - ACTIVE)' if success else '인스턴스 생성 완료'}`")
 

@@ -5,14 +5,26 @@ echo "=== 1. Installing Nginx and Certbot ==="
 apt-get update -y
 apt-get install -y nginx certbot python3-certbot-nginx openssl
 
-echo "=== 2. Generating High-Security OpenSSL SAN SSL Certificate ==="
+echo "=== 2. Detecting External IP & Generating SSL Certificate ==="
+# Detect external IP dynamically from GCP metadata server, or fallback to argument / ifconfig.me
+EXTERNAL_IP="${1:-}"
+if [ -z "$EXTERNAL_IP" ]; then
+    EXTERNAL_IP=$(curl -s -f -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip" 2>/dev/null || true)
+fi
+if [ -z "$EXTERNAL_IP" ]; then
+    EXTERNAL_IP=$(curl -s -f https://ifconfig.me 2>/dev/null || curl -s -f https://api.ipify.org 2>/dev/null || echo "127.0.0.1")
+fi
+
+IP_DASH=$(echo "$EXTERNAL_IP" | tr '.' '-')
+echo "External IP detected: $EXTERNAL_IP ($IP_DASH.sslip.io)"
+
 mkdir -p /etc/ssl/certs /etc/ssl/private
 
 openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
   -keyout /etc/ssl/private/chatbot.key \
   -out /etc/ssl/certs/chatbot.crt \
-  -subj "/CN=136.65.198.112/O=The Herbwitch Academy/C=KR" \
-  -addext "subjectAltName=IP:136.65.198.112,DNS:136-65-198-112.sslip.io,DNS:136.65.198.112.nip.io,DNS:localhost"
+  -subj "/CN=${EXTERNAL_IP}/O=The Herbwitch Academy/C=KR" \
+  -addext "subjectAltName=IP:${EXTERNAL_IP},DNS:${IP_DASH}.sslip.io,DNS:${EXTERNAL_IP}.nip.io,DNS:localhost"
 
 chmod 600 /etc/ssl/private/chatbot.key
 chmod 644 /etc/ssl/certs/chatbot.crt
@@ -71,8 +83,12 @@ systemctl daemon-reload
 systemctl enable nginx
 systemctl restart nginx
 
-echo "=== 5. Attempting Let's Encrypt Certificate for 136-65-198-112.sslip.io ==="
-certbot --nginx -d 136-65-198-112.sslip.io --non-interactive --agree-tos --register-unsafely-without-email || echo "Let's Encrypt notice: Fallback to OpenSSL SAN certificate active."
+echo "=== 5. Attempting Let's Encrypt Certificate for ${IP_DASH}.sslip.io ==="
+if [ "$EXTERNAL_IP" != "127.0.0.1" ]; then
+    certbot --nginx -d "${IP_DASH}.sslip.io" --non-interactive --agree-tos --register-unsafely-without-email || echo "Let's Encrypt notice: Fallback to OpenSSL SAN certificate active."
+else
+    echo "Localhost detected, skipping Let's Encrypt."
+fi
 
 systemctl reload nginx
 echo "=== HTTPS Setup Complete! ==="

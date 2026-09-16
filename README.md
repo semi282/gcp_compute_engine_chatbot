@@ -20,7 +20,7 @@
   *(포트 번호 `:5000` 없이 바로 접속 가능한 웹 표준 HTTPS)*
 - 🌐 **기존 포트 5000 호환 접속**: **[https://136.65.198.112:5000](https://136.65.198.112:5000)**  
 - 🔄 **HTTP 자동 보안 리다이렉트**: `http://136-65-198-112.sslip.io` 접속 시 `https://`로 즉시 301 자동 전환
-- 📋 **실시간 배포/인프라 로그 문서**: [deployment_log.md](deployment_log.md)
+- 📋 **실시간 배포/인프라 로그 문서**: [compute_engine/deployment_log.md](compute_engine/deployment_log.md)
 
 ---
 
@@ -216,33 +216,35 @@ flowchart TD
 
 ```text
 gcp_compute_engine_chatbot/
-├── .env.example               # 로컬 환경변수 템플릿
-├── .gitignore                 # DB 및 캐시 보호 규칙
-├── LICENSE                    # MIT 라이선스
-├── README.md                  # 프로젝트 통합 안내 및 기술 문서
-├── requirements.txt           # Python 라이브러리 목록 (flask, google-genai, requests 등)
-├── run.bat                    # Windows 원클릭 로컬 실행기
-├── app.py                     # Flask 백엔드, SQLite 인증, SSE 스트리밍, Secret Manager 연동
-├── deployment_log.md          # 인프라 생성 및 배포 전 과정 타임스탬프 기록
-├── compute_engine_example.ipynb # GCP 전 세계 인프라 최적 비용 분석 노트북
-├── instance/
-│   └── chatbot.db             # SQLite3 내장 DB (사용자 계정, 암호화 해시, 대화 기록)
-├── scripts/
-│   ├── startup.sh             # GCP VM 인스턴스 자동 부트스트랩 스크립트
-│   ├── setup_https.sh         # Nginx 리버스 프록시, SSL 인증서, Let's Encrypt 자동화 스크립트
-│   ├── chatbot.service        # Linux systemd 상시 백그라운드 서비스 정의 파일
-│   └── deploy_to_gcp.py       # 클라우드 배포 및 오케스트레이션 파이썬 스크립트
-├── templates/
-│   └── index.html             # 빅토리안 아치 프레임, 수습생 명부 모달, 챗봇 웹 UI
-└── static/
-    ├── css/
-    │   └── style.css          # 로열 페리윙클 & 앤틱 골드 디자인 시스템 스타일시트
-    ├── js/
-    │   └── chat.js            # SSE 스트림 파서, 마크다운 렌더링, 계정 인증 및 클라우드 동기화
-    └── img/
-        ├── ireen_character.jpg # 수습 허브마녀 아이린 일러스트레이션 (웰컴 스크린)
-        ├── ireen_avatar.png    # 아이린 원형 아바타 (채팅 말풍선 & 프로필)
-        └── herbwitch_cover.jpg # 원작 도서 표지 일러스트레이션
+├── .gitignore                      # Git 추적 제외 규칙 (DB, 캐시, 보안 키 등)
+├── LICENSE                         # MIT 오픈소스 라이선스
+├── README.md                       # 프로젝트 통합 안내 및 기술 문서
+├── run.bat                         # 루트 원클릭 실행 편의 래퍼 (compute_engine/run.bat 호출)
+└── compute_engine/                 # 🚀 GCP Compute Engine 배포 및 챗봇 서비스 패키지
+    ├── .env.example                # 로컬 환경변수 템플릿
+    ├── app.py                      # Flask 백엔드, SQLite 인증, SSE 스트리밍, Secret Manager 연동
+    ├── requirements.txt            # Python 라이브러리 목록 (flask, google-genai, requests 등)
+    ├── run.bat                     # compute_engine 전용 로컬 실행기
+    ├── compute_engine_example.ipynb # GCP 전 세계 인프라 최적 비용 분석 노트북
+    ├── deployment_log.md           # 인프라 생성 및 배포 전 과정 타임스탬프 기록
+    ├── instance/
+    │   └── chatbot.db              # SQLite3 내장 DB (사용자 계정, 암호화 해시, 대화 기록)
+    ├── scripts/
+    │   ├── startup.sh              # GCP VM 인스턴스 자동 부트스트랩 스크립트
+    │   ├── setup_https.sh          # Nginx 리버스 프록시, SSL 인증서, Let's Encrypt 자동화 스크립트
+    │   ├── chatbot.service         # Linux systemd 상시 백그라운드 서비스 정의 파일
+    │   └── deploy_to_gcp.py        # 클라우드 배포 및 오케스트레이션 파이썬 스크립트
+    ├── templates/
+    │   └── index.html              # 빅토리안 아치 프레임, 수습생 명부 모달, 챗봇 웹 UI
+    └── static/
+        ├── css/
+        │   └── style.css           # 로열 페리윙클 & 앤틱 골드 디자인 시스템 스타일시트
+        ├── js/
+        │   └── chat.js             # SSE 스트림 파서, 마크다운 렌더링, 계정 인증 및 클라우드 동기화
+        └── img/
+            ├── ireen_character.jpg  # 수습 허브마녀 아이린 일러스트레이션 (웰컴 스크린)
+            ├── ireen_avatar.png     # 아이린 원형 아바타 (채팅 말풍선 & 프로필)
+            └── herbwitch_cover.jpg  # 원작 도서 표지 일러스트레이션
 ```
 
 ---
@@ -256,7 +258,7 @@ gcp_compute_engine_chatbot/
 ### 2. 저장소 복제 및 의존성 설치
 ```bash
 git clone https://github.com/YOUR_USERNAME/gcp_compute_engine_chatbot.git
-cd gcp_compute_engine_chatbot
+cd gcp_compute_engine_chatbot/compute_engine
 
 pip install -r requirements.txt
 ```
@@ -268,14 +270,35 @@ pip install -r requirements.txt
   ```
 - **`.env` 파일 생성**:
   ```bash
+  cd compute_engine
   cp .env.example .env
   # .env 파일에 GEMINI_API_KEY=AIzaSy... 입력
   ```
 
 ### 4. 서버 기동
-- **Windows**: `run.bat` 더블 클릭
-- **터미널**: `python app.py`
+- **Windows**: 루트의 `run.bat` 또는 `compute_engine\run.bat` 더블 클릭
+- **터미널**:
+  ```bash
+  cd compute_engine
+  python app.py
+  ```
 - 브라우저 접속: **`http://localhost:5000`**
+
+---
+
+## ☁️ GCP Compute Engine 배포 방법
+
+저장소 루트 또는 `compute_engine` 폴더 어디서든 아래 명령어로 원클릭 오케스트레이션 배포가 가능합니다.
+
+```bash
+# 루트 디렉터리에서 실행 시
+python compute_engine/scripts/deploy_to_gcp.py
+
+# 또는 compute_engine 디렉터리로 이동 후 실행 시
+cd compute_engine
+python scripts/deploy_to_gcp.py
+```
+> 배포 스크립트는 `compute_engine/` 폴더 내 소스 코드를 자동으로 `bundle.tar.gz`로 패키징하여 GCP VM의 `/opt/chatbot`으로 전송 및 기동합니다.
 
 ---
 
